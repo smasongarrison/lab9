@@ -1,7 +1,7 @@
 ---
 title: "Lab 09: Algorithmic Bias"
-author: "Insert your name here"
-date: "Insert date here"
+author: "Haley Lam"
+date: "3/15/26"
 output: github_document
 ---
 
@@ -12,17 +12,104 @@ First, let's load the necessary packages:
 ```{r load-packages, message = FALSE}
 library(tidyverse)
 library(fairness)
+library(janitor)
 ```
 
 ### The data
 
 For this lab, we'll use the COMPAS dataset compiled by ProPublica. The data has been preprocessed and cleaned for you. You'll have to load it yourself. The dataset is available in the `data` folder, but I've changed the file name from `compas-scores-two-years.csv` to `compas-scores-2-years.csv`. I've done this help you practice debugging code when you encounter an error.
 
+
+Clean the code (given in the textbook online)
 ```{r}
-compas <- read_csv("data/compas-scores-two-years.csv")
+# Load the COMPAS data
+compas <- read_csv("data/compas-scores-2-years.csv") %>%
+  clean_names() %>%
+  rename(
+    decile_score = decile_score_12,
+    priors_count = priors_count_15
+  )
+
+# Take a look at the data
+glimpse(compas)
 ```
 
+## Part 1: Exploring the Data
 
-## Additional Exercises  
+### Exercise #1
+Each row represents an individual, and the columns have variables about that individual (e.g., sex, age, race)
+There are `r nrow(compas)` individuals and `r ncol(compas)` pieces of information about each individual.
 
-Almost there! Keep building on your work and follow the same structure for any remaining exercises. Each exercise builds on the last, so take your time and make sure your code is working as expected.  
+### Exercise #2
+```{r}
+# number of duplicates in the dataset (based on name)
+sum(duplicated(compas$name))
+```
+There are `r sum(duplicated(compas$name))` duplicates! They might be defendants who were arrested multiple times?
+
+### Exercise #3
+Let's examine the distribution of decile_score
+```{r}
+ggplot(compas, aes(x = decile_score)) +
+  geom_bar()
+```
+It is not normally distributed and right-skewed! Most people are given a low decile_score.
+
+### Exercise #4
+Distribution of demographics in the dataset.
+```{r}
+# Sex
+ggplot(compas, aes(x = sex))+
+  geom_bar()
+
+# Race
+ggplot(compas, aes(x = race))+
+  geom_bar()
+
+# Age
+ggplot(compas, aes(x = age_cat))+
+  geom_bar()
+```
+
+## Part 2: Risk Scores and Recidivism
+
+### Exercise #5
+What's the relationship between risk scores and recidivism?
+```{r}
+compas %>%
+  group_by(decile_score) %>%
+  summarize(rate = mean(two_year_recid, na.rm = TRUE)) %>%
+  ggplot(aes(x = decile_score, y = rate)) +
+  geom_point()
+```
+Wow! That is a very positively correlated scatterplot if I've seen one! 
+
+### Exercise #6
+The "accuracy" of the algorithm
+```{r}
+compas <- compas %>%
+  mutate(compas_classification = case_when(
+    decile_score >= 7 & two_year_recid == 1 ~ "TP",
+    decile_score <= 4 & two_year_recid == 0 ~ "TN",
+    decile_score >= 7 & two_year_recid == 0 ~ "FP",
+    decile_score <= 4 & two_year_recid == 1 ~ "FN",
+    TRUE ~ NA_character_
+  ))
+
+compas %>% 
+  count(compas_classification)
+```
+There are 1,216 false negatives and 644 false positives. There are 2,681 true negatives and 1,351 true positives. 
+
+### Exercise #7
+```{r}
+compas %>%
+  filter(!is.na(compas_classification)) %>%
+  summarize(
+    accuracy = sum(compas_classification %in% c("TP", "TN")) / n()
+  )
+```
+Filtering out the NA values, the model got 68.4% correct. This isn't great!
+
+
+
