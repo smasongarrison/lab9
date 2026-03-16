@@ -240,3 +240,178 @@ compas %>%
 
 Filtering out the NA values, the model got 68.4% correct. This isn’t
 great!
+
+## Part 3: Investigating Disparities
+
+### Exercise \#8
+
+``` r
+compas %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  ggplot(aes(x = decile_score)) +
+  geom_bar() +
+  facet_wrap(~ race)
+```
+
+![](lab-09_files/figure-gfm/unnamed-chunk-8-1.png)<!-- --> The Caucasian
+one is right-skewed (like the overall distribution), while the
+African-American one is evenly distributed (like a uniform
+distribution).
+
+### Exercise \#9
+
+``` r
+compas %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  group_by(race) %>%
+  summarize(pct_high_risk = mean(decile_score >= 7, na.rm = TRUE))
+```
+
+    ## # A tibble: 2 × 2
+    ##   race             pct_high_risk
+    ##   <chr>                    <dbl>
+    ## 1 African-American         0.386
+    ## 2 Caucasian                0.171
+
+36.8% of Black defendants were classified as high risk, while 17.1% of
+Caucasian defendants were classified as high risk.
+
+### Exercise \#10
+
+Proportion of non-recidivists who were classified as high risk
+
+``` r
+non_recidivists <- compas %>%
+  filter(two_year_recid == 0)
+
+fpr <- non_recidivists %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  group_by(race) %>%
+  summarize(rate = mean(decile_score >= 7, na.rm = TRUE)) %>%
+  mutate(error_type = "False Positive Rate")
+fpr
+```
+
+    ## # A tibble: 2 × 3
+    ##   race               rate error_type         
+    ##   <chr>             <dbl> <chr>              
+    ## 1 African-American 0.249  False Positive Rate
+    ## 2 Caucasian        0.0914 False Positive Rate
+
+There’s a 25% false-positive rate for African-Americans while a 9%
+false-positive rate for Caucasians.
+
+Proportion of recidivists who were classified as low risk
+
+``` r
+recidivists <- compas %>%
+  filter(two_year_recid == 1)
+
+fnr <- recidivists %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  group_by(race) %>%
+  summarize(rate = mean(decile_score <= 4, na.rm = TRUE)) %>%
+  mutate(error_type = "False Negative Rate")
+fnr
+```
+
+    ## # A tibble: 2 × 3
+    ##   race              rate error_type         
+    ##   <chr>            <dbl> <chr>              
+    ## 1 African-American 0.280 False Negative Rate
+    ## 2 Caucasian        0.477 False Negative Rate
+
+There’s a 28% false-negative rate for African-Americans and a 48%
+false-negative rate for Caucasians.
+
+### Exercise \#11
+
+Create a plot to visualize the discrepency
+
+``` r
+bind_rows(fpr, fnr) %>%
+  ggplot(aes(x = race, y = rate)) +
+  geom_col() + 
+  facet_wrap(~ error_type)
+```
+
+![](lab-09_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+
+The false negative bar is higher for Caucasians, and false positive bar
+is higher for African-Americans.
+
+## Part 4: Understanding Sources of Bias
+
+### Exercise \#12
+
+``` r
+compas %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  ggplot(aes(x = priors_count, y = decile_score, color = race)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](lab-09_files/figure-gfm/unnamed-chunk-13-1.png)<!-- --> It seems the
+slope for Caucasian is greater than the slope for African-American,
+though African-Americans have a higher score with 0 priors. This means
+the algorithm assigns a higher risk score to African-Americans even when
+they have no prior convictions.
+
+### Exercise \#13
+
+Check calibration:
+
+``` r
+compas %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  group_by(race, decile_score) %>%
+  summarize(rate = mean(two_year_recid, na.rm = TRUE)) %>%
+  ggplot(aes(x = decile_score, y = rate, color = race)) +
+  geom_line()
+```
+
+    ## `summarise()` has grouped output by 'race'. You can override using the
+    ## `.groups` argument.
+
+![](lab-09_files/figure-gfm/unnamed-chunk-14-1.png)<!-- --> It seems
+like the lines overlap pretty well, showing good calibration. This
+supports Northpointe’s claim that the algorithm is fair!
+
+## Part 5: Designing Fairer Algorithms
+
+### Exercise \#14
+
+How do we create a fairer risk assessment algorithm?
+
+I assume that variables like neighborhood (and its crime rates), zip
+code, etc. were collected and used for the algorithm. These variables
+might highly correlate with race and socioeconomic status. If they were
+removed, it’s possible that there will be less bias, even though model
+“accuracy” might decrease.
+
+Another idea is to try adjust the model to make the ‘false positive
+rate’ roughly the same across racial groups. There’ll be a tradeoff
+between accuracy and this type of ‘fariness’, but aiming for this
+equality in false positive rates seems fair even if overall accuracy
+drops.
+
+### Exercise \#15
+
+ProPublica’s conceptualization of fairness is about equal error rates
+across races. Northpointe’s is about the algorithm’s score being equally
+predictive of risk across races. There is a tradeoff between the model’s
+accuracy (i.e., how well the model can predict risk overall) and how
+equal it is for races (i.e., how much error discrepency there is across
+races).
+
+### Exercise \#16
+
+It seems necessary to me for these tools to have openly accessible data
+for the public to know what these algorithms are trained on. It is also
+important that the false positive or false negative rates for each race
+(or other variables) are known to judges. They can make their decisions
+more clearly with this information and can choose to trust the computer
+less if a specific race has unequal error rates.
