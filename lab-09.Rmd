@@ -21,6 +21,7 @@ For this lab, we'll use the COMPAS dataset compiled by ProPublica. The data has 
 
 
 Clean the code (given in the textbook online)
+
 ```{r}
 # Load the COMPAS data
 compas <- read_csv("data/compas-scores-2-years.csv") %>%
@@ -41,6 +42,7 @@ Each row represents an individual, and the columns have variables about that ind
 There are `r nrow(compas)` individuals and `r ncol(compas)` pieces of information about each individual.
 
 ### Exercise #2
+
 ```{r}
 # number of duplicates in the dataset (based on name)
 sum(duplicated(compas$name))
@@ -49,14 +51,17 @@ There are `r sum(duplicated(compas$name))` duplicates! They might be defendants 
 
 ### Exercise #3
 Let's examine the distribution of decile_score
+
 ```{r}
 ggplot(compas, aes(x = decile_score)) +
   geom_bar()
 ```
+
 It is not normally distributed and right-skewed! Most people are given a low decile_score.
 
 ### Exercise #4
 Distribution of demographics in the dataset.
+
 ```{r}
 # Sex
 ggplot(compas, aes(x = sex))+
@@ -74,7 +79,9 @@ ggplot(compas, aes(x = age_cat))+
 ## Part 2: Risk Scores and Recidivism
 
 ### Exercise #5
+
 What's the relationship between risk scores and recidivism?
+
 ```{r}
 compas %>%
   group_by(decile_score) %>%
@@ -82,10 +89,13 @@ compas %>%
   ggplot(aes(x = decile_score, y = rate)) +
   geom_point()
 ```
+
 Wow! That is a very positively correlated scatterplot if I've seen one! 
 
 ### Exercise #6
+
 The "accuracy" of the algorithm
+
 ```{r}
 compas <- compas %>%
   mutate(compas_classification = case_when(
@@ -99,9 +109,11 @@ compas <- compas %>%
 compas %>% 
   count(compas_classification)
 ```
+
 There are 1,216 false negatives and 644 false positives. There are 2,681 true negatives and 1,351 true positives. 
 
 ### Exercise #7
+
 ```{r}
 compas %>%
   filter(!is.na(compas_classification)) %>%
@@ -113,6 +125,7 @@ Filtering out the NA values, the model got 68.4% correct. This isn't great!
 
 ## Part 3: Investigating Disparities
 ### Exercise #8
+
 ```{r}
 compas %>%
   filter(race %in% c("African-American", "Caucasian")) %>%
@@ -123,16 +136,19 @@ compas %>%
 The Caucasian one is right-skewed (like the overall distribution), while the African-American one is evenly distributed (like a uniform distribution).
 
 ### Exercise #9
+
 ```{r}
 compas %>%
   filter(race %in% c("African-American", "Caucasian")) %>%
   group_by(race) %>%
   summarize(pct_high_risk = mean(decile_score >= 7, na.rm = TRUE))
 ```
+
 36.8% of Black defendants were classified as high risk, while 17.1% of Caucasian defendants were classified as high risk.
 
 ### Exercise #10
  Proportion of non-recidivists who were classified as high risk
+
 ```{r}
 non_recidivists <- compas %>%
   filter(two_year_recid == 0)
@@ -144,10 +160,12 @@ fpr <- non_recidivists %>%
   mutate(error_type = "False Positive Rate")
 fpr
 ```
- There's a 25% false-positive rate for African-Americans while a 9% false-positive rate for Caucasians.
+
+There's a 25% false-positive rate for African-Americans while a 9% false-positive rate for Caucasians.
  
  
 Proportion of recidivists who were classified as low risk
+
 ```{r}
 recidivists <- compas %>%
   filter(two_year_recid == 1)
@@ -159,10 +177,13 @@ fnr <- recidivists %>%
   mutate(error_type = "False Negative Rate")
 fnr
 ```
+
 There's a 28% false-negative rate for African-Americans and a 48% false-negative rate for Caucasians.
 
 ### Exercise #11
+
 Create a plot to visualize the discrepency
+
 ```{r}
 bind_rows(fpr, fnr) %>%
   ggplot(aes(x = race, y = rate)) +
